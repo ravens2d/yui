@@ -3,7 +3,7 @@ from rich.panel import Panel
 from rich.theme import Theme
 from rich.prompt import Prompt
 
-from app.model import Message, Contact, Role, MessageType 
+from app.model import Message, Contact, Role, MessageType, Fact
 from app.repository import Repository
 from app.gateway import CompletionGateway, ActionType
 
@@ -41,7 +41,7 @@ class ChatController():
                 user_input = Prompt.ask("[green]You[/green]")
                 print("\033[2A\033[2K", end="")
 
-                message = self.repository.save_message(role=Role.USER, content=user_input, conversation=conversation, contact=contact)
+                message = self.repository.save_message(Message(role=Role.USER, content=user_input, conversation=conversation, contact=contact))
                 print_message(message, console)
                 
                 has_text_response = False 
@@ -57,15 +57,15 @@ class ChatController():
                         elif response.message_type == MessageType.TOOL_USE:
                             if response.tool_use_name == ActionType.REMEMBER_FACT.value:
                                 print(f"Remembering fact: {response.tool_use_input['fact']}")
-                                self.repository.save_fact(content=response.tool_use_input["fact"], contact=contact)
+                                self.repository.save_fact(Fact(content=response.tool_use_input["fact"], contact=contact))
                             elif response.tool_use_name == ActionType.TOPIC_CHANGED.value:
                                 print("Topic changed")
                                 conversation = self.repository.create_conversation(contact=contact)
                                 message.conversation = conversation # if the topic changed, we need to update the triggering message to the new conversation
-                                self.repository.update_message(message=message)         
+                                self.repository.save_message(message)
                             
                             # create matching user response message for tool use response
-                            self.repository.save_messages(messages=[Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input)])
+                            self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
             
                 print()
 

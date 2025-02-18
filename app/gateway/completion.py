@@ -49,8 +49,9 @@ class CompletionGateway():
         messages = messages_to_anthropic_message(reversed(db_messages))
 
         facts_str = ""
-        if contact.facts:
-            facts_str = "Facts you know about the user:\n" + "\n".join(f"- {fact.content}" for fact in contact.facts)
+        facts = self.repository.get_facts_for_contact(contact)
+        if facts:
+            facts_str = "Facts you know about the user:\n" + "\n".join(f"- {fact.content}" for fact in facts)
         else:
             facts_str = "You have no known facts about the user yet and have likely never spoken before. You should ask the user about themselves, including their name!"
         

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List
 from sqlmodel import create_engine, SQLModel, Session, select
 
@@ -17,13 +17,7 @@ class Repository:
         self.session.close()
         self.engine.dispose()
 
-    def save_message(self, role: Role, content: str, conversation: Conversation, contact: Contact) -> Message:
-        message = Message(
-            role=role,
-            content=content,
-            conversation=conversation,
-            contact=contact,
-        )
+    def save_message(self, message: Message) -> Message:
         self.session.add(message)
         self.session.commit()
         return message
@@ -48,18 +42,14 @@ class Repository:
         
         return contact 
     
-    def save_fact(self, content: str, contact: Contact) -> Fact:
-        fact = Fact(
-            content=content,
-            contact=contact
-        )
+    def save_fact(self, fact: Fact) -> Fact:
         self.session.add(fact)
         self.session.commit()
         return fact
 
     def create_conversation(self, contact: Contact) -> Conversation:
         if contact.current_conversation:
-            contact.current_conversation.end_time = datetime.now()
+            contact.current_conversation.end_time = datetime.now(tz=UTC)
             self.session.add(contact.current_conversation)
         
         conversation = Conversation(contact=contact)
@@ -69,8 +59,7 @@ class Repository:
 
     def get_messages_for_contact(self, contact: Contact, limit: int = 50) -> List[Message]:
         return self.session.exec(select(Message).where(Message.contact == contact).order_by(Message.timestamp.desc()).limit(limit)).all()
-
-    def update_message(self, message: Message) -> Message:
-        self.session.add(message)
-        self.session.commit()
-        return message
+    
+    def get_facts_for_contact(self, contact: Contact) -> List[Fact]:
+        return self.session.exec(select(Fact).where(Fact.contact == contact)).all() 
+    
