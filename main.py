@@ -1,10 +1,13 @@
-from app.database import Database
-from app.chat import run_chat
+from app.repository import Repository
+from app.controller import ChatController
+from app.gateway import CompletionGateway
 
 
 if __name__ == "__main__":
-    db = Database()
-    
-    with db.get_session() as session:
-        contact = db.get_or_create_contact(session, "some_user")
-        run_chat(session, contact, db)
+    with Repository() as repository:
+        completion_gateway = CompletionGateway(repository=repository)
+        chat_controller = ChatController(repository=repository, completion_gateway=completion_gateway)
+
+        contact = repository.get_or_create_contact('ravens')
+
+        chat_controller.run_chat(contact=contact)
