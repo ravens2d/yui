@@ -1,7 +1,6 @@
 
 import os
-from dataclasses import dataclass
-from typing import Optional, Tuple, List
+from typing import List
 from enum import Enum
 
 import anthropic
@@ -9,7 +8,7 @@ import dotenv
 
 from app.repository import Repository
 from app.model import Contact, Message, MessageType, Role
-
+from app.mapper import messages_to_anthropic_message, anthropic_messages_to_message
 
 dotenv.load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv('CLAUDE_API_KEY', ''))
@@ -87,26 +86,4 @@ class CompletionGateway():
             tools=TOOLS,
         )
                 
-        responses = []
-        for value in res.content:
-            if value.type == "text":
-                responses.append(Message(role=Role.ASSISTANT, message_type=MessageType.CHAT, content=value.text, conversation=contact.current_conversation, contact=contact))
-            elif value.type == "tool_use":
-                responses.append(Message(role=Role.ASSISTANT, message_type=MessageType.TOOL_USE, conversation=contact.current_conversation, contact=contact, tool_use_id=value.id, tool_use_name=value.name, tool_use_input=value.input))
-
-        return responses
-
-
-def messages_to_anthropic_message(messages: List[Message]) -> List[anthropic.types.MessageParam]:
-    results = []
-
-    for message in messages:
-        if message.message_type == MessageType.CHAT:
-            results.append(anthropic.types.MessageParam(role=message.role.value, content=message.content))
-        elif message.message_type == MessageType.TOOL_USE:
-            if message.role == Role.ASSISTANT:
-                results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.ToolUseBlockParam(id=message.tool_use_id, name=message.tool_use_name, input=message.tool_use_input, type="tool_use")]))
-            elif message.role == Role.USER:
-                results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.ToolResultBlockParam(tool_use_id=message.tool_use_id, content=message.content, type="tool_result")]))
-            
-    return results
+        return anthropic_messages_to_message(res.content, contact)
