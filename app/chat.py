@@ -52,6 +52,6 @@ def run_chat(session, contact: Contact, db: Database):
 
 def print_message(message: Message, console: Console):
     time_str = message.timestamp.strftime("%H:%M:%S")
-    title = f"{message.role.title() if message.role == Role.USER else 'Yui'} • [timestamp]{time_str}[/timestamp]"
+    title = f"{'You' if message.role == Role.USER else 'Yui'} • [timestamp]{time_str}[/timestamp]"
     style = message.role.lower()
     console.print(Panel(message.content, title=title, style=style, title_align="left", border_style=style))

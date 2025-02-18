@@ -12,6 +12,5 @@ python main.py
 
 ## env vars
 ```
-DISCORD_KEY=
 CLAUDE_API_KEY=
 ```
