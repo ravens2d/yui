@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Tuple
+from typing import List
 from sqlmodel import create_engine, SQLModel, Session, select
 
 from app.model import Contact, Conversation, Message, Role, Fact
@@ -18,11 +18,15 @@ class Database:
             content=content,
             conversation=conversation,
             contact=contact,
-            timestamp=datetime.now()
         )
         session.add(message)
         session.commit()
         return message
+
+    def save_messages(self, session: Session, messages: List[Message]) -> List[Message]:
+        session.add_all(messages)
+        session.commit()
+        return messages
 
     def get_or_create_contact(self, session: Session, name: str) -> Contact:
         contact = session.exec(select(Contact).where(Contact.name == name)).first()
@@ -57,3 +61,11 @@ class Database:
         session.add(conversation)
         session.commit()
         return conversation
+
+    def get_messages_for_contact(self, session: Session, contact: Contact, limit: int = 50) -> List[Message]:
+        return session.exec(select(Message).where(Message.contact == contact).order_by(Message.timestamp.desc()).limit(limit)).all()
+
+    def update_message(self, session: Session, message: Message) -> Message:
+        session.add(message)
+        session.commit()
+        return message

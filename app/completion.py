@@ -6,15 +6,12 @@ from enum import Enum
 import anthropic
 import dotenv
 
-from app.model import Message, Conversation, Contact, Fact
+from app.model import Message, Conversation, Contact, Fact, MessageType, Role
+from app.database import Database, Session
+
 
 dotenv.load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv('CLAUDE_API_KEY', ''))
-
-@dataclass
-class Action:
-    type: "ActionType"
-    fact: Optional[str] = None
 
 
 class ActionType(str, Enum):
@@ -32,11 +29,18 @@ TOOLS = [
             "required": ["fact"],
         },
     },
+    {
+        "name": ActionType.TOPIC_CHANGED.value,
+        "description": "The topic of the conversation has changed. This should be only at a natural break in the conversation, when the user has changed the topic of the conversation, or when you have lost track of the topic.",
+        "input_schema": {
+            "type": "object",
+        },
+    },
 ]
 
 
-def complete(contact: Contact, conversation: Conversation) -> Tuple[str, List[Action]]:
-    messages = [{"role": message.role.value, "content": message.content} for message in conversation.messages]
+def complete(contact: Contact, conversation: Conversation, session: Session, db: Database) -> List[Message]:
+    messages = messages_to_anthropic_message(reversed(db.get_messages_for_contact(session=session, contact=contact)))
 
     facts_str = ""
     if contact.facts:
@@ -76,15 +80,26 @@ def complete(contact: Contact, conversation: Conversation) -> Tuple[str, List[Ac
         tools=TOOLS,
     )
 
-    actions = []
-    response = ""
-
+    responses = []
     for value in res.content:
         if value.type == "text":
-            response += value.text
+            responses.append(Message(role=Role.ASSISTANT, message_type=MessageType.CHAT, content=value.text, conversation=conversation, contact=contact))
         elif value.type == "tool_use":
-            if value.name == ActionType.REMEMBER_FACT.value:
-                actions.append(Action(type=ActionType.REMEMBER_FACT, fact=value.input["fact"]))
+            responses.append(Message(role=Role.ASSISTANT, message_type=MessageType.TOOL_USE, conversation=conversation, contact=contact, tool_use_id=value.id, tool_use_name=value.name, tool_use_input=value.input))
 
-    return response, actions
+    return responses
 
+
+def messages_to_anthropic_message(messages: List[Message]) -> List[anthropic.types.MessageParam]:
+    results = []
+
+    for message in messages:
+        if message.message_type == MessageType.CHAT:
+            results.append(anthropic.types.MessageParam(role=message.role.value, content=message.content))
+        elif message.message_type == MessageType.TOOL_USE:
+            if message.role == Role.ASSISTANT:
+                results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.ToolUseBlockParam(id=message.tool_use_id, name=message.tool_use_name, input=message.tool_use_input, type="tool_use")]))
+            elif message.role == Role.USER:
+                results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.ToolResultBlockParam(tool_use_id=message.tool_use_id, content=message.content, type="tool_result")]))
+            
+    return results
