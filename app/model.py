@@ -16,7 +16,12 @@ class Conversation(SQLModel, table=True):
     end_time: Optional[datetime] = None
     summary: Optional[str] = None
 
-    messages: List["Message"] = Relationship(back_populates="conversation")
+    messages: List["Message"] = Relationship(
+        back_populates="conversation",
+        sa_relationship_kwargs={
+            "order_by": "Message.timestamp"
+        }
+    )
     
     contact_id: str = Field(foreign_key="contact.id")
     contact: "Contact" = Relationship(back_populates="conversations")
@@ -48,5 +53,14 @@ class Contact(SQLModel, table=True):
     name: str
 
     messages: List["Message"] = Relationship(back_populates="contact")
-    conversations: List["Conversation"] = Relationship(back_populates="contact")
+    conversations: List["Conversation"] = Relationship(
+        back_populates="contact",
+        sa_relationship_kwargs={
+            "order_by": "Conversation.start_time.desc()"
+        }
+    )
     facts: List["Fact"] = Relationship(back_populates="contact")
+
+    @property
+    def current_conversation(self) -> Optional[Conversation]:
+        return self.conversations[0] if self.conversations else None

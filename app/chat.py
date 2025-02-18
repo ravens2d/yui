@@ -13,7 +13,7 @@ from app.database import Database
 MAX_OLD_MESSAGES = 10
 
 
-def run_chat(session, contact: Contact, conversation: Conversation, db: Database):
+def run_chat(session, contact: Contact, db: Database):
     console = Console(theme=Theme({
         "user": "green",
         "assistant": "cornflower_blue",
@@ -22,6 +22,7 @@ def run_chat(session, contact: Contact, conversation: Conversation, db: Database
     }))
     console.clear()
 
+    conversation = contact.current_conversation
     messages = conversation.messages[-MAX_OLD_MESSAGES:] if len(conversation.messages) > MAX_OLD_MESSAGES else conversation.messages
     for message in messages:
         print_message(message, console)

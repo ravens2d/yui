@@ -24,7 +24,7 @@ class Database:
         session.commit()
         return message
 
-    def get_or_create_contact_with_conversation(self, session: Session, name: str) -> Tuple[Contact, Conversation]:
+    def get_or_create_contact(self, session: Session, name: str) -> Contact:
         contact = session.exec(select(Contact).where(Contact.name == name)).first()
         
         if contact is None:
@@ -32,15 +32,9 @@ class Database:
             session.add(contact)
             session.flush()
         
-        latest_conversation = session.exec(
-            select(Conversation)
-            .where(Conversation.contact_id == contact.id)
-            .order_by(Conversation.start_time.desc())
-        ).first()
-        
-        if latest_conversation is None or latest_conversation.end_time is not None:
-            latest_conversation = Conversation(contact=contact)
-            session.add(latest_conversation)
+        if not contact.conversations or contact.current_conversation.end_time is not None:
+            new_conversation = Conversation(contact=contact)
+            session.add(new_conversation)
             session.commit()
         
-        return contact, latest_conversation 
+        return contact 
