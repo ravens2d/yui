@@ -1,7 +1,7 @@
 from datetime import datetime, UTC
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from enum import Enum
-from sqlmodel import SQLModel, Field, Relationship, select, Session
+from sqlmodel import SQLModel, Field, Relationship
 import uuid
 
 
@@ -38,6 +38,7 @@ class Message(SQLModel, table=True):
 class Fact(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     content: str
+
     contact_id: str = Field(foreign_key="contact.id")
     contact: "Contact" = Relationship(back_populates="facts")
 
@@ -49,24 +50,3 @@ class Contact(SQLModel, table=True):
     messages: List["Message"] = Relationship(back_populates="contact")
     conversations: List["Conversation"] = Relationship(back_populates="contact")
     facts: List["Fact"] = Relationship(back_populates="contact")
-
-    @classmethod
-    def get_or_create_with_conversation(cls, session: Session, name: str) -> Tuple["Contact", Conversation]:
-        contact = session.exec(select(Contact).where(Contact.name == name)).first()
-        
-        if contact is None:
-            contact = Contact(name=name)
-            session.add(contact)
-            session.flush()
-        
-        latest_conversation = session.exec(
-            select(Conversation)
-            .where(Conversation.contact_id == contact.id)
-            .order_by(Conversation.start_time.desc())
-        ).first()
-        
-        if latest_conversation is None or latest_conversation.end_time is not None:
-            latest_conversation = Conversation(contact=contact)
-            session.add(latest_conversation)
-        
-        return contact, latest_conversation
