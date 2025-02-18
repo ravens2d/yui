@@ -6,7 +6,7 @@ from rich.theme import Theme
 from rich.prompt import Prompt
 
 from app.model import Message, Conversation, Contact, Role
-from app.completion import complete
+from app.completion import complete, Action, ActionType
 from app.database import Database
 
 
@@ -35,7 +35,14 @@ def run_chat(session, contact: Contact, db: Database):
             message = db.save_message(session=session, role=Role.USER, content=user_input, conversation=conversation, contact=contact)
             print_message(message, console)
             
-            response = complete(conversation)
+            response, actions = complete(contact, conversation)
+            for action in actions:
+                if action.type == ActionType.REMEMBER_FACT:
+                    print(f"Remembering fact: {action.fact}")
+                    db.save_fact(session=session, content=action.fact, contact=contact)
+                elif action.type == ActionType.TOPIC_CHANGED:
+                    print("Topic changed")
+                    conversation = db.create_conversation(session=session, contact=contact)
             response_message = db.save_message(session=session, role=Role.ASSISTANT, content=response, conversation=conversation, contact=contact)
             print_message(response_message, console)
             print()

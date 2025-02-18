@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Tuple
 from sqlmodel import create_engine, SQLModel, Session, select
 
-from app.model import Contact, Conversation, Message, Role
+from app.model import Contact, Conversation, Message, Role, Fact
 
 class Database:
     def __init__(self, db_url: str = "sqlite:///yui.db"):
@@ -38,3 +38,22 @@ class Database:
             session.commit()
         
         return contact 
+    
+    def save_fact(self, session: Session, content: str, contact: Contact) -> Fact:
+        fact = Fact(
+            content=content,
+            contact=contact
+        )
+        session.add(fact)
+        session.commit()
+        return fact
+
+    def create_conversation(self, session: Session, contact: Contact) -> Conversation:
+        if contact.current_conversation:
+            contact.current_conversation.end_time = datetime.now()
+            session.add(contact.current_conversation)
+        
+        conversation = Conversation(contact=contact)
+        session.add(conversation)
+        session.commit()
+        return conversation
