@@ -40,9 +40,7 @@ def run_chat(session, contact: Contact, db: Database):
                 if action.type == ActionType.REMEMBER_FACT:
                     print(f"Remembering fact: {action.fact}")
                     db.save_fact(session=session, content=action.fact, contact=contact)
-                elif action.type == ActionType.TOPIC_CHANGED:
-                    print("Topic changed")
-                    conversation = db.create_conversation(session=session, contact=contact)
+
             response_message = db.save_message(session=session, role=Role.ASSISTANT, content=response, conversation=conversation, contact=contact)
             print_message(response_message, console)
             print()
@@ -54,6 +52,6 @@ def run_chat(session, contact: Contact, db: Database):
 
 def print_message(message: Message, console: Console):
     time_str = message.timestamp.strftime("%H:%M:%S")
-    title = f"{message.role.title()} • [timestamp]{time_str}[/timestamp]"
+    title = f"{message.role.title() if message.role == Role.USER else 'Yui'} • [timestamp]{time_str}[/timestamp]"
     style = message.role.lower()
     console.print(Panel(message.content, title=title, style=style, title_align="left", border_style=style))

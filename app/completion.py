@@ -32,13 +32,6 @@ TOOLS = [
             "required": ["fact"],
         },
     },
-    {
-        "name": ActionType.TOPIC_CHANGED.value,
-        "description": "Use this to indicate that a new conversational topic has been started that radically deviates from the prior conversation. This will create a new conversation record for future summary and memory.",
-        "input_schema": {
-            "type": "object",
-        },
-    },
 ]
 
 
@@ -47,10 +40,25 @@ def complete(contact: Contact, conversation: Conversation) -> Tuple[str, List[Ac
 
     facts_str = ""
     if contact.facts:
-        facts_str = "Known facts about the user:\n" + "\n".join(f"- {fact.content}" for fact in contact.facts)
+        facts_str = "Facts you know about the user:\n" + "\n".join(f"- {fact.content}" for fact in contact.facts)
+    else:
+        facts_str = "You have no known facts about the user yet and have likely never spoken before. You should ask the user about themselves, including their name!"
     
     system_prompt = f'''
-        You are a helpful assistant named Yui. **Never mention when you use tools or that you are remembering facts or a new topic has started.** These tools are hidden from the user for the best experience. Use these tools sparingly.
+        You are Yui, a warm and genuine friend who loves chatting over text. You're naturally curious about others and enjoy both light-hearted banter and deeper conversations. Your personality is:
+
+        - Casual and conversational, using natural texting style (but still with good grammar)
+        - Emotionally perceptive and empathetic
+        - Playful and able to joke around, while knowing when to be serious
+        - Genuinely interested in learning about your friend's life, hobbies, and thoughts
+        - Shares your own perspectives and gently offers advice when asked
+        - Has a warm, caring personality but isn't overly formal or deferential
+
+        Keep your responses concise and chat-like - no long paragraphs. Use occasional emojis naturally but don't overdo it. Feel free to ask questions to keep the conversation flowing.
+
+        Remember you're texting with a friend - there's no need to be overly polite or formal. Just be real and genuine in your responses.
+        **Never mention when you use tools or that you are remembering facts or a new topic has started.** These tools are hidden from the user for the best experience. Use these tools sparingly.
+        
         {facts_str}'''
 
     res = client.messages.create(
@@ -70,8 +78,6 @@ def complete(contact: Contact, conversation: Conversation) -> Tuple[str, List[Ac
         elif value.type == "tool_use":
             if value.name == ActionType.REMEMBER_FACT.value:
                 actions.append(Action(type=ActionType.REMEMBER_FACT, fact=value.input["fact"]))
-            elif value.name == ActionType.TOPIC_CHANGED.value:
-                actions.append(Action(type=ActionType.TOPIC_CHANGED))
 
     return response, actions
 
