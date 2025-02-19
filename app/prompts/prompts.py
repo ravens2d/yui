@@ -1,11 +1,7 @@
 from typing import List
-from zoneinfo import ZoneInfo
 
 from app.model import Fact, Conversation
-
-
-UTC = ZoneInfo('UTC')
-DEFAULT_TIMEZONE = ZoneInfo('US/Pacific')
+from app.constants import UTC, DEFAULT_TIMEZONE 
 
 
 BASE_SYSTEM_PROMPT = '''

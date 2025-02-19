@@ -6,6 +6,7 @@ from rich.prompt import Prompt
 from app.model import Message, Contact, Role, MessageType, Fact
 from app.repository import Repository
 from app.gateway import CompletionGateway, ActionType
+from app.constants import DEFAULT_TIMEZONE, UTC
 
 
 MAX_OLD_MESSAGES = 10
@@ -79,7 +80,7 @@ class ChatController():
 
 
 def print_message(message: Message, console: Console):
-    time_str = message.timestamp.strftime("%H:%M:%S")
+    time_str = message.timestamp.replace(tzinfo=UTC).astimezone(tz=DEFAULT_TIMEZONE).strftime("%H:%M:%S")
     title = f"{'You' if message.role == Role.USER else 'Yui'} • [timestamp]{time_str}[/timestamp]"
     style = message.role.lower()
     console.print(Panel(message.content, title=title, style=style, title_align="left", border_style=style))
