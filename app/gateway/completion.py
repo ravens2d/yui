@@ -11,7 +11,7 @@ import dotenv
 from app.repository import Repository
 from app.model import Contact, Message, Conversation, MessageType
 from app.mapper import messages_to_anthropic_message, anthropic_messages_to_message
-from app.prompts import get_chat_system_prompt, get_facts_prompt, get_prior_conversations_prompt
+from app.prompts import get_chat_system_prompt, get_facts_prompt, get_prior_conversations_prompt, BASE_SYSTEM_PROMPT
 
 
 dotenv.load_dotenv()
@@ -73,8 +73,11 @@ class CompletionGateway():
         db_messages = [m for m in db_messages if m.message_type == MessageType.CHAT] # filter out tool use
         messages = messages_to_anthropic_message(reversed(db_messages))
         
-        system_prompt = f'''Summarize the following conversation in one to two sentences.'''
-        messages.append(anthropic.types.MessageParam(role="user", content="Summarize the conversation in one to two sentences.")) # we have to end on a user message i guess lol
+        system_prompt = f'''
+        {BASE_SYSTEM_PROMPT}
+
+        summarize the following conversation in one to two sentences from your perspective for your own memory.'''
+        messages.append(anthropic.types.MessageParam(role="user", content="summarize the conversation in one to two sentences from your perspective for your own memory.")) # we have to end on a user message i guess lol
 
         res = client.messages.create(
             model="claude-3-5-sonnet-20240620",
