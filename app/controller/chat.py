@@ -55,19 +55,21 @@ class ChatController():
                             print_message(response, console)
 
                         elif response.message_type == MessageType.TOOL_USE:
-                            # create matching user response message for tool use response
-                            self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
-
                             if response.tool_use_name == ActionType.REMEMBER_FACT.value:
                                 print(f"[FACT]: {response.tool_use_input['fact']}")
                                 self.repository.save_fact(Fact(content=response.tool_use_input["fact"], contact=contact))
                             elif response.tool_use_name == ActionType.TOPIC_CHANGED.value:
-                                summary = self.completion_gateway.summarize_conversation(conversation)
-                                print(f"[SUMMARY]: {summary}")
-                                
+                                prior_conversation = conversation # so that we don't include the message that triggered the tool use in the summary
+
                                 conversation = self.repository.create_conversation(contact=contact)
                                 message.conversation = conversation # we need to update the triggering message to the new conversation
                                 self.repository.save_message(message)
+
+                                summary = self.completion_gateway.summarize_conversation(prior_conversation)
+                                print(f"[SUMMARY]: {summary}")
+
+                            # create matching user response message for tool use response
+                            self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
             
                 print()
 
