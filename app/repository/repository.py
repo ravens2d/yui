@@ -57,9 +57,19 @@ class Repository:
         self.session.commit()
         return conversation
 
+    def save_conversation(self, conversation: Conversation) -> Conversation:
+        self.session.add(conversation)
+        self.session.commit()
+        return conversation
+
+    def get_conversations_for_contact(self, contact: Contact) -> List[Conversation]:
+        return self.session.exec(select(Conversation).where(Conversation.contact == contact).order_by(Conversation.start_time.desc())).all()
+
     def get_messages_for_contact(self, contact: Contact, limit: int = 50) -> List[Message]:
         return self.session.exec(select(Message).where(Message.contact == contact).order_by(Message.timestamp.desc()).limit(limit)).all()
     
     def get_facts_for_contact(self, contact: Contact) -> List[Fact]:
         return self.session.exec(select(Fact).where(Fact.contact == contact)).all() 
     
+    def get_messages_for_conversation(self, conversation: Conversation) -> List[Message]:
+        return self.session.exec(select(Message).where(Message.conversation == conversation).order_by(Message.timestamp.desc())).all()

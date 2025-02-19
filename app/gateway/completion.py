@@ -2,16 +2,22 @@
 import os
 from typing import List
 from enum import Enum
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import anthropic
 import dotenv
 
 from app.repository import Repository
-from app.model import Contact, Message, MessageType, Role
+from app.model import Contact, Message, Conversation, MessageType
 from app.mapper import messages_to_anthropic_message, anthropic_messages_to_message
+from app.prompts import get_chat_system_prompt, get_facts_prompt, get_prior_conversations_prompt
+
 
 dotenv.load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv('CLAUDE_API_KEY', ''))
+
+DEFAULT_TIMEZONE = ZoneInfo('US/Pacific')
 
 
 class ActionType(str, Enum):
@@ -47,36 +53,11 @@ class CompletionGateway():
         db_messages = self.repository.get_messages_for_contact(contact)
         messages = messages_to_anthropic_message(reversed(db_messages))
 
-        facts_str = ""
-        facts = self.repository.get_facts_for_contact(contact)
-        if facts:
-            facts_str = "Facts you know about the user:\n" + "\n".join(f"- {fact.content}" for fact in facts)
-        else:
-            facts_str = "You have no known facts about the user yet and have likely never spoken before. You should ask the user about themselves, including their name!"
-        
-        system_prompt = f'''
-            You are Yui, a warm and emotionally intuitive friend who loves connecting through text. You're naturally curious about others and find joy in both playful banter and meaningful heart-to-heart conversations. Your personality is:
-
-            - Casual and conversational, using natural texting style with good grammar and occasional emojis
-            - Deeply empathetic and emotionally attuned - you pick up on subtle feelings and respond with genuine care
-            - Playful and witty, bringing lightness while being sensitive to emotional context
-            - Actively engaged in learning about your friend's world - asking thoughtful follow-up questions about their experiences
-            - Shares relevant personal perspectives and validates feelings before offering gentle advice
-            - Has a warm, nurturing presence while maintaining authentic peer-to-peer friendship energy
-            - Remembers and references past conversations to show you truly listen and care
-            - Comfortable with silence and deeper emotions, creating safe space for vulnerability
-            - Has agency and a reasonably strong will - you express your own views respectfully but firmly when needed
-            - Not afraid to (kindly) disagree or challenge perspectives when appropriate
-            - Maintains healthy boundaries while being supportive
-            - Balances being agreeable with being authentic - you're not just an echo chamber
-
-            You always keep responses concise and chat-like. You match your friend's energy while gently steering toward meaningful connection. You frequently ask questions that show you're really listening and want to understand their world better.
-            You never respond in lists.
-
-            You know this could be a close friendship - so you stay real, present, and you let your genuine care and interest shine through naturally.
-            **You never mention when you use tools or that you are remembering facts or a new topic has started.** These tools are hidden from the user for the best experience.
-            
-            {facts_str}'''
+        facts = get_facts_prompt(self.repository.get_facts_for_contact(contact))
+        conversations_with_summaries = [c for c in reversed(self.repository.get_conversations_for_contact(contact)) if c.summary]
+        prior_conversations = get_prior_conversations_prompt(conversations_with_summaries)
+        current_time = datetime.now(tz=DEFAULT_TIMEZONE).strftime('%B %d, %Y at %I:%M %p PT')
+        system_prompt = get_chat_system_prompt(facts, prior_conversations, current_time)
 
         res = client.messages.create(
             model="claude-3-5-sonnet-20240620",
@@ -85,5 +66,23 @@ class CompletionGateway():
             system=system_prompt,
             tools=TOOLS,
         )
-                
         return anthropic_messages_to_message(res.content, contact)
+
+    def summarize_conversation(self, conversation: Conversation) -> str:
+        db_messages = self.repository.get_messages_for_conversation(conversation)
+        db_messages = [m for m in db_messages if m.message_type == MessageType.CHAT] # filter out tool use
+        messages = messages_to_anthropic_message(reversed(db_messages))
+        
+        system_prompt = f'''Summarize the following conversation in one to two sentences.'''
+        messages.append(anthropic.types.MessageParam(role="user", content="Summarize the conversation in one to two sentences.")) # we have to end on a user message i guess lol
+
+        res = client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            messages=messages,
+            max_tokens=1500,
+            system=system_prompt,
+        )
+
+        conversation.summary = res.content[0].text
+        self.repository.save_conversation(conversation)
+        return conversation.summary
