@@ -1,3 +1,5 @@
+import asyncio
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.theme import Theme
@@ -32,10 +34,10 @@ class ChatController():
                 print_message(message, console)
             elif message.message_type == MessageType.TOOL_USE and message.role == Role.ASSISTANT:
                 if message.tool_use_name == ActionType.REMEMBER_FACT.value:
-                    console.print(Panel(f"{message.tool_use_input['fact']}", title="[FACT]", title_align="left",  border_style="tool", style="tool"))
+                    console.print(Panel(f"{message.tool_use_input['fact']}", title="Fact", title_align="left",  border_style="tool", style="tool"))
                 elif message.tool_use_name == ActionType.TOPIC_CHANGED.value:
                     msg_conversation = await self.repository.get_conversation_for_message(message)
-                    console.print(Panel(f"{msg_conversation.summary}", title="[SUMMARY]", title_align="left",  border_style="tool", style="tool"))
+                    console.print(Panel(f"{msg_conversation.summary}", title="Summary", title_align="left",  border_style="tool", style="tool"))
         
         if messages:
             print()
@@ -49,7 +51,15 @@ class ChatController():
             
             has_text_response = False 
             while not has_text_response:
-                responses = await self.completion_gateway.complete(contact) 
+                completion_task = asyncio.create_task(self.completion_gateway.complete(contact))
+                
+                while not completion_task.done():
+                    for dots in range(1, 4):
+                        print(f"..."[0:dots], end="", flush=True)
+                        await asyncio.sleep(0.3)
+                        print("\r\033[K", end="")
+
+                responses = await completion_task
                 await self.repository.save_messages(messages=responses)
 
                 for response in responses:
@@ -59,7 +69,7 @@ class ChatController():
 
                     elif response.message_type == MessageType.TOOL_USE:
                         if response.tool_use_name == ActionType.REMEMBER_FACT.value:
-                            print(f"[FACT]: {response.tool_use_input['fact']}")
+                            console.print(Panel(f"{response.tool_use_input['fact']}", title="Fact", title_align="left",  border_style="tool", style="tool"))
                             await self.repository.save_fact(Fact(content=response.tool_use_input["fact"], contact=contact))
                         elif response.tool_use_name == ActionType.TOPIC_CHANGED.value:
                             prior_conversation = conversation # so that we don't include the message that triggered the tool use in the summary
@@ -69,7 +79,7 @@ class ChatController():
                             await self.repository.save_message(message)
 
                             summary = await self.completion_gateway.summarize_conversation(prior_conversation)
-                            print(f"[SUMMARY]: {summary}")
+                            console.print(Panel(f"{summary}", title="Summary", title_align="left",  border_style="tool", style="tool"))
 
                         # create matching user response message for tool use response
                         await self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
