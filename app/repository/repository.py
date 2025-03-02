@@ -115,3 +115,8 @@ class Repository:
             result = await session.exec(select(Message).where(Message.conversation == conversation).order_by(Message.timestamp.desc()))
             return result.all()
  
+    async def get_conversation_for_message(self, message: Message) -> Conversation:
+        async with self.session() as session:
+            await session.merge(message)
+            result = await session.exec(select(Conversation).where(Conversation.messages.contains(message)))
+            return result.first()

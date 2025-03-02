@@ -9,9 +9,6 @@ from app.gateway import CompletionGateway, ActionType
 from app.constants import DEFAULT_TIMEZONE, UTC
 
 
-MAX_OLD_MESSAGES = 10
-
-
 class ChatController():
     def __init__(self, repository: Repository, completion_gateway: CompletionGateway):
         self.repository = repository
@@ -22,61 +19,62 @@ class ChatController():
             "user": "green",
             "assistant": "cornflower_blue",
             "system": "yellow",
-            "timestamp": "dim"
+            "timestamp": "dim",
+            "tool": "grey70",
         }))
         console.clear()
 
         conversation = contact.current_conversation
+
         messages = reversed(await self.repository.get_messages_for_contact(contact)) 
         for message in messages:
             if message.message_type == MessageType.CHAT:
                 print_message(message, console)
             elif message.message_type == MessageType.TOOL_USE and message.role == Role.ASSISTANT:
                 if message.tool_use_name == ActionType.REMEMBER_FACT.value:
-                    print(f"[FACT]: {message.tool_use_input['fact']}")
+                    console.print(Panel(f"{message.tool_use_input['fact']}", title="[FACT]", title_align="left",  border_style="tool", style="tool"))
                 elif message.tool_use_name == ActionType.TOPIC_CHANGED.value:
-                    print(f"[SUMMARY]: {message.conversation.summary}")
+                    msg_conversation = await self.repository.get_conversation_for_message(message)
+                    console.print(Panel(f"{msg_conversation.summary}", title="[SUMMARY]", title_align="left",  border_style="tool", style="tool"))
+        
+        if messages:
+            print()
 
         while True:
-            try:
-                user_input = Prompt.ask("[green]You[/green]")
-                print("\033[2A\033[2K", end="")
+            user_input = Prompt.ask("[green]You[/green]")
+            print("\033[2A\033[2K", end="")
 
-                message = await self.repository.save_message(Message(role=Role.USER, content=user_input, conversation=conversation, contact=contact))
-                print_message(message, console)
-                
-                has_text_response = False 
-                while not has_text_response:
-                    responses = await self.completion_gateway.complete(contact) 
-                    await self.repository.save_messages(messages=responses)
-
-                    for response in responses:
-                        if response.message_type == MessageType.CHAT:
-                            has_text_response = True
-                            print_message(response, console)
-
-                        elif response.message_type == MessageType.TOOL_USE:
-                            if response.tool_use_name == ActionType.REMEMBER_FACT.value:
-                                print(f"[FACT]: {response.tool_use_input['fact']}")
-                                await self.repository.save_fact(Fact(content=response.tool_use_input["fact"], contact=contact))
-                            elif response.tool_use_name == ActionType.TOPIC_CHANGED.value:
-                                prior_conversation = conversation # so that we don't include the message that triggered the tool use in the summary
-
-                                conversation = await self.repository.create_conversation(contact=contact)
-                                message.conversation = conversation # we need to update the triggering message to the new conversation
-                                await self.repository.save_message(message)
-
-                                summary = await self.completion_gateway.summarize_conversation(prior_conversation)
-                                print(f"[SUMMARY]: {summary}")
-
-                            # create matching user response message for tool use response
-                            await self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
+            message = await self.repository.save_message(Message(role=Role.USER, content=user_input, conversation=conversation, contact=contact))
+            print_message(message, console)
             
-                print()
+            has_text_response = False 
+            while not has_text_response:
+                responses = await self.completion_gateway.complete(contact) 
+                await self.repository.save_messages(messages=responses)
 
-            except KeyboardInterrupt:
-                print()
-                break
+                for response in responses:
+                    if response.message_type == MessageType.CHAT:
+                        has_text_response = True
+                        print_message(response, console)
+
+                    elif response.message_type == MessageType.TOOL_USE:
+                        if response.tool_use_name == ActionType.REMEMBER_FACT.value:
+                            print(f"[FACT]: {response.tool_use_input['fact']}")
+                            await self.repository.save_fact(Fact(content=response.tool_use_input["fact"], contact=contact))
+                        elif response.tool_use_name == ActionType.TOPIC_CHANGED.value:
+                            prior_conversation = conversation # so that we don't include the message that triggered the tool use in the summary
+
+                            conversation = await self.repository.create_conversation(contact=contact)
+                            message.conversation = conversation # we need to update the triggering message to the new conversation
+                            await self.repository.save_message(message)
+
+                            summary = await self.completion_gateway.summarize_conversation(prior_conversation)
+                            print(f"[SUMMARY]: {summary}")
+
+                        # create matching user response message for tool use response
+                        await self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
+        
+            print()
 
 
 def print_message(message: Message, console: Console):
