@@ -17,7 +17,7 @@ class ChatController():
         self.repository = repository
         self.completion_gateway = completion_gateway
 
-    def run_chat(self, contact: Contact):
+    async def run_chat(self, contact: Contact):
         console = Console(theme=Theme({
             "user": "green",
             "assistant": "cornflower_blue",
@@ -27,7 +27,7 @@ class ChatController():
         console.clear()
 
         conversation = contact.current_conversation
-        messages = reversed(self.repository.get_messages_for_contact(contact)) 
+        messages = reversed(await self.repository.get_messages_for_contact(contact)) 
         for message in messages:
             if message.message_type == MessageType.CHAT:
                 print_message(message, console)
@@ -42,13 +42,13 @@ class ChatController():
                 user_input = Prompt.ask("[green]You[/green]")
                 print("\033[2A\033[2K", end="")
 
-                message = self.repository.save_message(Message(role=Role.USER, content=user_input, conversation=conversation, contact=contact))
+                message = await self.repository.save_message(Message(role=Role.USER, content=user_input, conversation=conversation, contact=contact))
                 print_message(message, console)
                 
                 has_text_response = False 
                 while not has_text_response:
-                    responses = self.completion_gateway.complete(contact) 
-                    self.repository.save_messages(messages=responses)
+                    responses = await self.completion_gateway.complete(contact) 
+                    await self.repository.save_messages(messages=responses)
 
                     for response in responses:
                         if response.message_type == MessageType.CHAT:
@@ -58,19 +58,19 @@ class ChatController():
                         elif response.message_type == MessageType.TOOL_USE:
                             if response.tool_use_name == ActionType.REMEMBER_FACT.value:
                                 print(f"[FACT]: {response.tool_use_input['fact']}")
-                                self.repository.save_fact(Fact(content=response.tool_use_input["fact"], contact=contact))
+                                await self.repository.save_fact(Fact(content=response.tool_use_input["fact"], contact=contact))
                             elif response.tool_use_name == ActionType.TOPIC_CHANGED.value:
                                 prior_conversation = conversation # so that we don't include the message that triggered the tool use in the summary
 
-                                conversation = self.repository.create_conversation(contact=contact)
+                                conversation = await self.repository.create_conversation(contact=contact)
                                 message.conversation = conversation # we need to update the triggering message to the new conversation
-                                self.repository.save_message(message)
+                                await self.repository.save_message(message)
 
-                                summary = self.completion_gateway.summarize_conversation(prior_conversation)
+                                summary = await self.completion_gateway.summarize_conversation(prior_conversation)
                                 print(f"[SUMMARY]: {summary}")
 
                             # create matching user response message for tool use response
-                            self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
+                            await self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
             
                 print()
 

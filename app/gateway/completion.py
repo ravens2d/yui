@@ -3,7 +3,6 @@ import os
 from typing import List
 from enum import Enum
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 import anthropic
 import dotenv
@@ -12,12 +11,11 @@ from app.repository import Repository
 from app.model import Contact, Message, Conversation, MessageType
 from app.mapper import messages_to_anthropic_message, anthropic_messages_to_message
 from app.prompts import get_chat_system_prompt, get_facts_prompt, get_prior_conversations_prompt, BASE_SYSTEM_PROMPT
+from app.constants import DEFAULT_TIMEZONE
 
 
 dotenv.load_dotenv()
-client = anthropic.Anthropic(api_key=os.getenv('CLAUDE_API_KEY', ''))
-
-DEFAULT_TIMEZONE = ZoneInfo('US/Pacific')
+client = anthropic.AsyncAnthropic(api_key=os.getenv('CLAUDE_API_KEY', ''))
 
 
 class ActionType(str, Enum):
@@ -49,17 +47,18 @@ class CompletionGateway():
     def __init__(self, repository: Repository):
         self.repository = repository
     
-    def complete(self, contact: Contact) -> List[Message]:
-        db_messages = self.repository.get_messages_for_contact(contact)
+    async def complete(self, contact: Contact) -> List[Message]:
+        db_messages = await self.repository.get_messages_for_contact(contact)
         messages = messages_to_anthropic_message(reversed(db_messages))
 
-        facts = get_facts_prompt(self.repository.get_facts_for_contact(contact))
-        conversations_with_summaries = [c for c in reversed(self.repository.get_conversations_for_contact(contact)) if c.summary]
+        facts = get_facts_prompt(await self.repository.get_facts_for_contact(contact))
+        conversations = await self.repository.get_conversations_for_contact(contact)
+        conversations_with_summaries = [c for c in reversed(conversations) if c.summary]
         prior_conversations = get_prior_conversations_prompt(conversations_with_summaries)
         current_time = datetime.now(tz=DEFAULT_TIMEZONE).strftime('%B %d, %Y at %I:%M %p PT')
         system_prompt = get_chat_system_prompt(facts, prior_conversations, current_time)
 
-        res = client.messages.create(
+        res = await client.messages.create(
             model="claude-3-5-sonnet-20240620",
             messages=messages,
             max_tokens=1500,
@@ -68,8 +67,8 @@ class CompletionGateway():
         )
         return anthropic_messages_to_message(res.content, contact)
 
-    def summarize_conversation(self, conversation: Conversation) -> str:
-        db_messages = self.repository.get_messages_for_conversation(conversation)
+    async def summarize_conversation(self, conversation: Conversation) -> str:
+        db_messages = await self.repository.get_messages_for_conversation(conversation)
         db_messages = [m for m in db_messages if m.message_type == MessageType.CHAT] # filter out tool use
         messages = messages_to_anthropic_message(reversed(db_messages))
         
@@ -79,7 +78,7 @@ class CompletionGateway():
         summarize the following conversation in one to two sentences from your perspective for your own memory.'''
         messages.append(anthropic.types.MessageParam(role="user", content="summarize the conversation in one to two sentences from your perspective for your own memory.")) # we have to end on a user message i guess lol
 
-        res = client.messages.create(
+        res = await client.messages.create(
             model="claude-3-5-sonnet-20240620",
             messages=messages,
             max_tokens=1500,
@@ -87,5 +86,5 @@ class CompletionGateway():
         )
 
         conversation.summary = res.content[0].text
-        self.repository.save_conversation(conversation)
+        await self.repository.save_conversation(conversation)
         return conversation.summary
