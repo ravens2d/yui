@@ -76,6 +76,9 @@ class Repository:
 
     async def create_conversation(self, contact: Contact) -> Conversation:
         async with self.session() as session:
+            contact = await session.merge(contact)
+            await session.refresh(contact, ['conversations'])
+
             if contact.current_conversation:
                 contact.current_conversation.end_time = datetime.now(tz=UTC)
                 session.add(contact.current_conversation)

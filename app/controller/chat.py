@@ -54,8 +54,8 @@ class ChatController():
                 completion_task = asyncio.create_task(self.completion_gateway.complete(contact))
                 
                 while not completion_task.done():
-                    for dots in range(1, 4):
-                        print(f"..."[0:dots], end="", flush=True)
+                    for dots in range(0, 4):
+                        print("\033[90m" + "..."[0:dots] + "\033[0m", end="", flush=True)
                         await asyncio.sleep(0.3)
                         print("\r\033[K", end="")
 

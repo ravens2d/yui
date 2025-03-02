@@ -11,7 +11,7 @@ from app.repository import Repository
 from app.model import Contact, Message, Conversation, MessageType
 from app.mapper import messages_to_anthropic_message, anthropic_messages_to_message
 from app.prompts import get_chat_system_prompt, get_facts_prompt, get_prior_conversations_prompt, BASE_SYSTEM_PROMPT
-from app.constants import DEFAULT_TIMEZONE
+from app.constants import DEFAULT_TIMEZONE, UTC
 
 
 dotenv.load_dotenv()
@@ -59,7 +59,7 @@ class CompletionGateway():
         system_prompt = get_chat_system_prompt(facts, prior_conversations, current_time)
 
         res = await client.messages.create(
-            model="claude-3-5-sonnet-20240620",
+            model="claude-3-7-sonnet-latest",
             messages=messages,
             max_tokens=1500,
             system=system_prompt,
