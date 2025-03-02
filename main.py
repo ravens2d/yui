@@ -1,8 +1,17 @@
 import asyncio
+import signal
+import sys
 
 from app.repository import Repository
 from app.controller import ChatController
 from app.gateway import CompletionGateway
+
+
+def handle_sigint(sig, frame):
+    print("")
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, handle_sigint)
 
 
 async def main():
