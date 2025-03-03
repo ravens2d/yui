@@ -26,9 +26,11 @@ class ChatController():
         }))
         console.clear()
 
-        conversation = contact.current_conversation
-
-        messages = reversed(await self.repository.get_messages_for_contact(contact)) 
+        conversation = await self.repository.get_conversation(contact.id)
+        if not conversation:
+            conversation = await self.repository.create_conversation(contact.id)
+        
+        messages = reversed(await self.repository.get_messages(contact.id)) 
         for message in messages:
             if message.message_type == MessageType.CHAT:
                 print_message(message, console)
@@ -36,7 +38,7 @@ class ChatController():
                 if message.tool_use_name == ActionType.REMEMBER_FACT.value:
                     console.print(Panel(f"{message.tool_use_input['fact']}", title="Fact", title_align="left",  border_style="tool", style="tool"))
                 elif message.tool_use_name == ActionType.TOPIC_CHANGED.value:
-                    msg_conversation = await self.repository.get_conversation_for_message(message)
+                    msg_conversation = await self.repository.get_conversation_for_message(message.id)
                     console.print(Panel(f"{msg_conversation.summary}", title="Summary", title_align="left",  border_style="tool", style="tool"))
         
         if messages:
@@ -46,12 +48,12 @@ class ChatController():
             user_input = Prompt.ask("[green]You[/green]")
             print("\033[2A\033[2K", end="")
 
-            message = await self.repository.save_message(Message(role=Role.USER, content=user_input, conversation=conversation, contact=contact))
+            message = await self.repository.create_message(Message(role=Role.USER, content=user_input, conversation_id=conversation.id, contact_id=contact.id))
             print_message(message, console)
             
             has_text_response = False 
             while not has_text_response:
-                completion_task = asyncio.create_task(self.completion_gateway.complete(contact))
+                completion_task = asyncio.create_task(self.completion_gateway.complete(contact, conversation))
                 
                 while not completion_task.done():
                     for dots in range(0, 4):
@@ -60,7 +62,7 @@ class ChatController():
                         print("\r\033[K", end="")
 
                 responses = await completion_task
-                await self.repository.save_messages(messages=responses)
+                await self.repository.create_messages(responses)
 
                 for response in responses:
                     if response.message_type == MessageType.CHAT:
@@ -70,19 +72,18 @@ class ChatController():
                     elif response.message_type == MessageType.TOOL_USE:
                         if response.tool_use_name == ActionType.REMEMBER_FACT.value:
                             console.print(Panel(f"{response.tool_use_input['fact']}", title="Fact", title_align="left",  border_style="tool", style="tool"))
-                            await self.repository.save_fact(Fact(content=response.tool_use_input["fact"], contact=contact))
+                            await self.repository.create_fact(Fact(content=response.tool_use_input["fact"], contact_id=contact.id))
                         elif response.tool_use_name == ActionType.TOPIC_CHANGED.value:
                             prior_conversation = conversation # so that we don't include the message that triggered the tool use in the summary
 
-                            conversation = await self.repository.create_conversation(contact=contact)
-                            message.conversation = conversation # we need to update the triggering message to the new conversation
-                            await self.repository.save_message(message)
+                            conversation = await self.repository.create_conversation(contact_id=contact.id)
+                            await self.repository.create_message(message)
 
                             summary = await self.completion_gateway.summarize_conversation(prior_conversation)
                             console.print(Panel(f"{summary}", title="Summary", title_align="left",  border_style="tool", style="tool"))
 
                         # create matching user response message for tool use response
-                        await self.repository.save_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation=conversation, contact=contact, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
+                        await self.repository.create_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation_id=conversation.id, contact_id=contact.id, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))
         
             print()
 

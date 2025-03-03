@@ -20,11 +20,11 @@ def messages_to_anthropic_message(messages: List[Message]) -> List[anthropic.typ
     return results
 
 
-def anthropic_messages_to_message(messages: List[anthropic.types.MessageParam], contact: Contact) -> Message:
+def anthropic_messages_to_messages(messages: List[anthropic.types.MessageParam], contact_id: str, conversation_id: str) -> List[Message]:
     res = []
     for message in messages:
         if message.type == "text":
-            res.append(Message(role=Role.ASSISTANT, message_type=MessageType.CHAT, content=message.text, conversation=contact.current_conversation, contact=contact))
+            res.append(Message(role=Role.ASSISTANT, message_type=MessageType.CHAT, content=message.text, contact_id=contact_id, conversation_id=conversation_id))
         elif message.type == "tool_use":
-            res.append(Message(role=Role.ASSISTANT, message_type=MessageType.TOOL_USE, conversation=contact.current_conversation, contact=contact, tool_use_id=message.id, tool_use_name=message.name, tool_use_input=message.input))
+            res.append(Message(role=Role.ASSISTANT, message_type=MessageType.TOOL_USE, contact_id=contact_id, conversation_id=conversation_id, tool_use_id=message.id, tool_use_name=message.name, tool_use_input=message.input))
     return res

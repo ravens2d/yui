@@ -19,7 +19,9 @@ async def main():
         completion_gateway = CompletionGateway(repository=repository)
         chat_controller = ChatController(repository=repository, completion_gateway=completion_gateway)
 
-        contact = await repository.get_or_create_contact('ravens')
+        contact = await repository.get_contact('ravens')
+        if not contact:
+            contact = await repository.create_contact('ravens')
 
         await chat_controller.run_chat(contact=contact)
 

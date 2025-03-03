@@ -1,4 +1,3 @@
-
 import os
 from typing import List
 from enum import Enum
@@ -9,7 +8,7 @@ import dotenv
 
 from app.repository import Repository
 from app.model import Contact, Message, Conversation, MessageType
-from app.mapper import messages_to_anthropic_message, anthropic_messages_to_message
+from app.mapper import messages_to_anthropic_message, anthropic_messages_to_messages
 from app.prompts import get_chat_system_prompt, get_facts_prompt, get_prior_conversations_prompt, BASE_SYSTEM_PROMPT
 from app.constants import DEFAULT_TIMEZONE, UTC
 
@@ -47,12 +46,12 @@ class CompletionGateway():
     def __init__(self, repository: Repository):
         self.repository = repository
     
-    async def complete(self, contact: Contact) -> List[Message]:
-        db_messages = await self.repository.get_messages_for_contact(contact)
+    async def complete(self, contact: Contact, conversation: Conversation) -> List[Message]:
+        db_messages = await self.repository.get_messages(contact.id)
         messages = messages_to_anthropic_message(reversed(db_messages))
 
-        facts = get_facts_prompt(await self.repository.get_facts_for_contact(contact))
-        conversations = await self.repository.get_conversations_for_contact(contact)
+        facts = get_facts_prompt(await self.repository.get_facts(contact.id))
+        conversations = await self.repository.get_conversations(contact.id)
         conversations_with_summaries = [c for c in reversed(conversations) if c.summary]
         prior_conversations = get_prior_conversations_prompt(conversations_with_summaries)
         current_time = datetime.now(tz=DEFAULT_TIMEZONE).strftime('%B %d, %Y at %I:%M %p PT')
@@ -65,10 +64,10 @@ class CompletionGateway():
             system=system_prompt,
             tools=TOOLS,
         )
-        return anthropic_messages_to_message(res.content, contact)
+        return anthropic_messages_to_messages(res.content, contact.id, conversation.id)
 
     async def summarize_conversation(self, conversation: Conversation) -> str:
-        db_messages = await self.repository.get_messages_for_conversation(conversation)
+        db_messages = await self.repository.get_messages_for_conversation(conversation.id)
         db_messages = [m for m in db_messages if m.message_type == MessageType.CHAT] # filter out tool use
         messages = messages_to_anthropic_message(reversed(db_messages))
         
@@ -85,6 +84,7 @@ class CompletionGateway():
             system=system_prompt,
         )
 
+        conversation.end_time = datetime.now(tz=UTC)
         conversation.summary = res.content[0].text
-        await self.repository.save_conversation(conversation)
+        await self.repository.update_conversation(conversation)
         return conversation.summary
