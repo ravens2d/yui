@@ -93,7 +93,6 @@ class CompletionGateway():
             messages=messages,
             max_tokens=1500,
         )
-        print(res.usage)
         return anthropic_messages_to_messages(res.content, contact.id, conversation.id)
 
     async def summarize_conversation(self, conversation: Conversation) -> str:
