@@ -15,12 +15,12 @@ from app.constants import DEFAULT_TIMEZONE, UTC
 
 dotenv.load_dotenv()
 client = anthropic.AsyncAnthropic(api_key=os.getenv('CLAUDE_API_KEY', ''))
-
+MODEL_NAME = "claude-3-7-sonnet-latest"
 
 class ActionType(str, Enum):
     REMEMBER_FACT = "remember_fact"
     TOPIC_CHANGED = "topic_changed"
-
+    EXTRACT_TRIPLES = "extract_triples"
 
 TOOLS = [
     {
@@ -37,6 +37,23 @@ TOOLS = [
         "description": "The topic of the conversation has changed. This should be only at a natural break in the conversation, when the user has changed the topic of the conversation, or when you have lost track of the topic.",
         "input_schema": {
             "type": "object",
+        },
+    },
+]
+
+CORPUS_TOOLS = [
+    {
+        "name": ActionType.EXTRACT_TRIPLES.value,
+        "description": "Extract the triples from the conversation. Only include novel information that you do not already understand or know implicitly. Focus on important details about the user that may boost EQ for future responses. The importance score should be a number from 1-10, where 1 is not important and 10 is very important, and should reflect the future importance of the information to you in terms of EQ.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"triples": {"type": "array", "items": {"type": "object", "properties": {
+                "subject": {"type": "string"},
+                "predicate": {"type": "string"},
+                "object": {"type": "string"},
+                "importance": {"type": "integer", "minimum": 1, "maximum": 10}
+            }, "required": ["subject", "predicate", "object", "importance"]}, "description": "The triples to extract from the conversation as objects with subject, predicate, object and importance score from 1-10"}},
+            "required": ["triples"],
         },
     },
 ]
@@ -58,7 +75,7 @@ class CompletionGateway():
         system_prompt = get_chat_system_prompt(facts, prior_conversations, current_time)
 
         res = await client.messages.create(
-            model="claude-3-7-sonnet-latest",
+            model=MODEL_NAME,
             messages=messages,
             max_tokens=1500,
             system=system_prompt,
@@ -78,7 +95,7 @@ class CompletionGateway():
         messages.append(anthropic.types.MessageParam(role="user", content="summarize the conversation in one to two sentences from your perspective for your own memory.")) # we have to end on a user message i guess lol
 
         res = await client.messages.create(
-            model="claude-3-5-sonnet-20240620",
+            model=MODEL_NAME,
             messages=messages,
             max_tokens=1500,
             system=system_prompt,
@@ -88,3 +105,16 @@ class CompletionGateway():
         conversation.summary = res.content[0].text
         await self.repository.update_conversation(conversation)
         return conversation.summary
+
+    async def extract_triples(self, corpus: str) -> List[str]:
+        print(corpus)
+        res = await client.messages.create(
+            model=MODEL_NAME,
+            messages=[anthropic.types.MessageParam(role="user", content=corpus)],
+            max_tokens=1500,
+            system="Please extract the triples from the following corpus. The triples should be in the format of (subject, predicate, object). Respond with only the triples, no other text. Only include novel information that you do not already understand or know implicitly. Focus on important details about the user that may boost EQ for future responses.",
+            tools=CORPUS_TOOLS,
+            tool_choice={"type": "tool", "name": ActionType.EXTRACT_TRIPLES.value},
+        )
+        return res.content[0].input['triples']
+    
