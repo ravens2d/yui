@@ -51,9 +51,11 @@ class ChatController():
             message = await self.repository.create_message(Message(role=Role.USER, content=user_input, conversation_id=conversation.id, contact_id=contact.id))
             print_message(message, console)
             
-            has_text_response = False 
-            while not has_text_response:
+            has_text_response = False
+            has_follow_up_response = False
+            while not has_text_response or has_follow_up_response:
                 completion_task = asyncio.create_task(self.completion_gateway.complete(contact, conversation))
+                has_follow_up_response = False
                 
                 while not completion_task.done():
                     for dots in range(0, 4):
@@ -81,6 +83,8 @@ class ChatController():
 
                             summary = await self.completion_gateway.summarize_conversation(prior_conversation)
                             console.print(Panel(f"{summary}", title="Summary", title_align="left",  border_style="tool", style="tool"))
+                        elif response.tool_use_name == ActionType.REQUIRES_FOLLOW_UP.value:
+                            has_follow_up_response = True # prompt the model again without waiting for user response
 
                         # create matching user response message for tool use response
                         await self.repository.create_message(Message(role=Role.USER, message_type=MessageType.TOOL_USE, content=response.content, conversation_id=conversation.id, contact_id=contact.id, tool_use_id=response.tool_use_id, tool_use_name=response.tool_use_name, tool_use_input=response.tool_use_input))

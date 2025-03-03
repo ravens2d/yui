@@ -20,6 +20,7 @@ MODEL_NAME = "claude-3-7-sonnet-latest"
 class ActionType(str, Enum):
     REMEMBER_FACT = "remember_fact"
     TOPIC_CHANGED = "topic_changed"
+    REQUIRES_FOLLOW_UP = "requires_follow_up"
     EXTRACT_TRIPLES = "extract_triples"
 
 TOOLS = [
@@ -39,6 +40,13 @@ TOOLS = [
             "type": "object",
         },
     },
+    {
+        "name": ActionType.REQUIRES_FOLLOW_UP.value,
+        "description": "Signals that you want to send an additional message after this one without waiting for user input. Use this when you want to split your message into multiple natural messages, specifically for longer messages or natural breaks, similar to texting. The system will immediately prompt you for your follow-up message after htis one is sent. After this call completes, immediately provide the follow up message in the next turn.",
+        "input_schema": {
+            "type": "object",
+        },
+    }
 ]
 
 CORPUS_TOOLS = [

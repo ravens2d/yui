@@ -42,6 +42,7 @@ class Conversation(SQLModel, table=True):
 class Fact(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     content: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
 
     contact_id: str = Field(foreign_key="contact.id")
 
