@@ -1,7 +1,7 @@
 import os
 from typing import List
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import anthropic
 import dotenv
@@ -70,31 +70,36 @@ CORPUS_TOOLS = [
 class CompletionGateway():
     def __init__(self, repository: Repository):
         self.repository = repository
+        self.cached_time = None
     
     async def complete(self, contact: Contact, conversation: Conversation) -> List[Message]:
         db_messages = await self.repository.get_messages(contact.id)
-        messages = messages_to_anthropic_message(reversed(db_messages))
+        messages = messages_to_anthropic_message(list(reversed(db_messages)))
 
         facts = get_facts_prompt(await self.repository.get_facts(contact.id))
         conversations = await self.repository.get_conversations(contact.id)
         conversations_with_summaries = [c for c in reversed(conversations) if c.summary]
         prior_conversations = get_prior_conversations_prompt(conversations_with_summaries)
-        current_time = datetime.now(tz=DEFAULT_TIMEZONE).strftime('%B %d, %Y at %I:%M %p PT')
-        system_prompt = get_chat_system_prompt(facts, prior_conversations, current_time)
+        
+        if self.cached_time is None or self.cached_time < datetime.now(tz=DEFAULT_TIMEZONE) - timedelta(minutes=10):
+            self.cached_time = datetime.now(tz=DEFAULT_TIMEZONE)
+
+        system_prompt = get_chat_system_prompt(facts, prior_conversations, self.cached_time.strftime('%B %d, %Y at %I:%M %p PT'))
 
         res = await client.messages.create(
             model=MODEL_NAME,
+            tools=TOOLS,
+            system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
             messages=messages,
             max_tokens=1500,
-            system=system_prompt,
-            tools=TOOLS,
         )
+        print(res.usage)
         return anthropic_messages_to_messages(res.content, contact.id, conversation.id)
 
     async def summarize_conversation(self, conversation: Conversation) -> str:
         db_messages = await self.repository.get_messages_for_conversation(conversation.id)
         db_messages = [m for m in db_messages if m.message_type == MessageType.CHAT] # filter out tool use
-        messages = messages_to_anthropic_message(reversed(db_messages))
+        messages = messages_to_anthropic_message(list(reversed(db_messages)))
         
         system_prompt = f'''
         {BASE_SYSTEM_PROMPT}

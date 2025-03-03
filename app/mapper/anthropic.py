@@ -8,15 +8,19 @@ from app.model import Message, MessageType, Role, Contact
 def messages_to_anthropic_message(messages: List[Message]) -> List[anthropic.types.MessageParam]:
     results = []
 
-    for message in messages:
+    for i, message in enumerate(messages):
+        cache_control = None
+        if i == len(messages) - 1:
+            cache_control = {"type": "ephemeral"}
+
         if message.message_type == MessageType.CHAT:
-            results.append(anthropic.types.MessageParam(role=message.role.value, content=message.content))
+            results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.TextBlockParam(type="text", text=message.content, cache_control=cache_control)]))
         elif message.message_type == MessageType.TOOL_USE:
             if message.role == Role.ASSISTANT:
-                results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.ToolUseBlockParam(id=message.tool_use_id, name=message.tool_use_name, input=message.tool_use_input, type="tool_use")]))
+                results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.ToolUseBlockParam(id=message.tool_use_id, name=message.tool_use_name, input=message.tool_use_input, type="tool_use", cache_control=cache_control)]))
             elif message.role == Role.USER:
-                results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.ToolResultBlockParam(tool_use_id=message.tool_use_id, content=message.content, type="tool_result")]))
-            
+                results.append(anthropic.types.MessageParam(role=message.role.value, content=[anthropic.types.ToolResultBlockParam(tool_use_id=message.tool_use_id, content=message.content, type="tool_result", cache_control=cache_control)]))
+    
     return results
 
 
